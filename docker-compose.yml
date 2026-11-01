@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  # Main IoT Fault Diagnosis Assistant (FastAPI + RAG + LLM + Tunnel)
+  p311-assistant:
+    build: .
+    container_name: p311_iot_assistant
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - MQTT_BROKER_HOST=broker.emqx.io
+      - MQTT_BROKER_PORT=1883
+      - LLM_PROVIDER=gemini
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - ENABLE_PUBLIC_TUNNEL=true
+    volumes:
+      - assistant_data:/app/app/data
+
+  # Optional Local Mosquitto MQTT Broker for air-gapped or local industrial setups
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: p311_mqtt_broker
+    restart: always
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_log:/mosquitto/log
+
+volumes:
+  assistant_data:
+  mosquitto_data:
+  mosquitto_log:

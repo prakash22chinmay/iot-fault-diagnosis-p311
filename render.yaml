@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: p311-iot-fault-assistant
+    runtime: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.api.app:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: MQTT_BROKER_HOST
+        value: broker.emqx.io
+      - key: MQTT_BROKER_PORT
+        value: 1883
+      - key: LLM_PROVIDER
+        value: gemini
+      - key: GEMINI_API_KEY
+        sync: false

@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>P_311: Knowledge-Driven IoT Fault Diagnosis Assistant</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22%3E<text y=%2226%22 font-size=%2226%22>⚙️</text></svg>">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap');
+    body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #0b0f17; color: #f1f5f9; }
+    .font-mono { font-family: 'JetBrains Mono', monospace; }
+    .glass-card { background: rgba(18, 24, 38, 0.75); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.08); }
+    .pulse-dot { animation: pulseGlow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+    @keyframes pulseGlow {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(1.15); }
+    }
+    .custom-scroll::-webkit-scrollbar { width: 6px; }
+    .custom-scroll::-webkit-scrollbar-track { background: rgba(0, 0, 0, 0.2); }
+    .custom-scroll::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.15); border-radius: 4px; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- TOP HEADER -->
+  <header class="border-b border-slate-800 bg-slate-900/80 sticky top-0 z-50 backdrop-blur-md px-4 lg:px-8 py-3.5">
+    <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center space-x-3.5">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-cyan-500/20 text-white text-lg">
+          <i class="fa-solid fa-microchip"></i>
+        </div>
+        <div>
+          <div class="flex items-center space-x-2">
+            <h1 class="text-lg font-bold text-white tracking-tight">IoT Fault Diagnosis Assistant</h1>
+            <span class="px-2 py-0.5 text-xs font-mono font-bold bg-cyan-950 text-cyan-400 border border-cyan-800 rounded">P_311</span>
+            <span class="hidden sm:inline-block px-2 py-0.5 text-xs font-mono bg-purple-950 text-purple-300 border border-purple-800 rounded">RAG + LLM</span>
+          </div>
+          <p class="text-xs text-slate-400">Continuous 24/7 Knowledge-Driven Condition Monitoring & Root-Cause Remediation</p>
+        </div>
+      </div>
+
+      <!-- STATUS BADGES & GLOBAL ACCESS BUTTON -->
+      <div class="flex items-center space-x-3">
+        <div class="hidden md:flex items-center space-x-2 bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700/60 text-xs">
+          <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 pulse-dot"></span>
+          <span class="text-slate-300">MQTT: <span id="broker-status" class="text-emerald-400 font-mono">broker.emqx.io</span></span>
+        </div>
+        <div class="flex items-center space-x-2 bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700/60 text-xs">
+          <span id="ws-dot" class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span>
+          <span id="ws-status" class="text-slate-300">Live WS</span>
+        </div>
+        <button onclick="openRemoteModal()" class="flex items-center space-x-2 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white text-xs font-semibold px-3.5 py-1.5 rounded-lg shadow-md shadow-cyan-600/20 transition">
+          <i class="fa-solid fa-globe"></i>
+          <span>24/7 Global Access</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- MAIN CONTAINER -->
+  <main class="flex-1 max-w-7xl w-full mx-auto p-4 lg:p-8 space-y-6">
+
+    <!-- ACTIVE ALERTS BANNER -->
+    <div id="alert-banner-container" class="hidden">
+      <div id="alert-banner" class="rounded-xl border p-4 flex items-start justify-between gap-4 transition shadow-xl">
+        <div class="flex items-start space-x-3">
+          <div id="alert-icon" class="text-xl mt-0.5"></div>
+          <div>
+            <h3 id="alert-title" class="text-sm font-bold tracking-wide"></h3>
+            <p id="alert-msg" class="text-xs mt-0.5 text-slate-200"></p>
+          </div>
+        </div>
+        <button id="alert-diag-btn" class="px-3 py-1 bg-white/20 hover:bg-white/30 rounded text-xs font-semibold transition shrink-0">
+          Run RAG Diagnosis
+        </button>
+      </div>
+    </div>
+
+    <!-- FLEET OVERVIEW GRID -->
+    <div>
+      <div class="flex items-center justify-between mb-3">
+        <h2 class="text-sm font-bold text-slate-300 uppercase tracking-wider flex items-center space-x-2">
+          <i class="fa-solid fa-server text-cyan-400"></i>
+          <span>Monitored IoT Equipment Fleet</span>
+        </h2>
+        <span class="text-xs text-slate-400 font-mono">Live MQTT Stream (2-3s interval)</span>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4" id="device-cards">
+        <!-- Rendered by JS -->
+      </div>
+    </div>
+
+    <!-- MAIN TWO-COLUMN DASHBOARD SECTION -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+      <!-- LEFT 2 COLS: TELEMETRY CHARTS & FAULT INJECTION -->
+      <div class="lg:col-span-2 space-y-6">
+        
+        <!-- REALTIME VIBRATION & ISO 10816 CHART -->
+        <div class="glass-card rounded-2xl p-5 shadow-xl">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+            <div>
+              <h3 class="text-sm font-bold text-white flex items-center space-x-2">
+                <i class="fa-solid fa-chart-line text-cyan-400"></i>
+                <span>Real-Time Vibration Velocity (ISO 10816-3 Severity)</span>
+              </h3>
+              <p class="text-xs text-slate-400">RMS Vibration (mm/s) with ISO Zone A/B/C/D threshold boundaries</p>
+            </div>
+            <div class="flex items-center space-x-2">
+              <select id="chart-device-select" class="bg-slate-800 border border-slate-700 text-xs rounded-lg px-2.5 py-1 text-slate-200 focus:outline-none focus:border-cyan-500">
+                <option value="MTR-101">MTR-101 (Motor)</option>
+                <option value="PUMP-204">PUMP-204 (Pump)</option>
+                <option value="CMP-301">CMP-301 (Compressor)</option>
+                <option value="FAN-402">FAN-402 (Blower)</option>
+              </select>
+            </div>
+          </div>
+          <div class="h-64 relative">
+            <canvas id="vibrationChart"></canvas>
+          </div>
+        </div>
+
+        <!-- SIMULATOR FAULT INJECTION LAB -->
+        <div class="glass-card rounded-2xl p-5 shadow-xl border border-slate-800">
+          <div class="flex items-center justify-between mb-3">
+            <div>
+              <h3 class="text-sm font-bold text-white flex items-center space-x-2">
+                <i class="fa-solid fa-flask-vial text-amber-400"></i>
+                <span>Interactive IoT Fault Injection Lab</span>
+              </h3>
+              <p class="text-xs text-slate-400">Simulate physical machine faults on demand to test RAG diagnosis & MQTT alerting</p>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+            <button onclick="injectFault('MTR-101', 'E101_BEARING_DEGRADATION')" class="p-3 rounded-xl bg-slate-800/80 hover:bg-amber-950/40 border border-slate-700 hover:border-amber-500 text-left transition group">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-slate-200 group-hover:text-amber-400">MTR-101</span>
+                <span class="px-1.5 py-0.5 rounded text-[10px] bg-amber-950 text-amber-300">Bearing Defect</span>
+              </div>
+              <p class="text-slate-400 mt-1">Triggers high peak acceleration (BPFO/BPFI) & bearing heat.</p>
+            </button>
+
+            <button onclick="injectFault('PUMP-204', 'E305_PUMP_CAVITATION')" class="p-3 rounded-xl bg-slate-800/80 hover:bg-rose-950/40 border border-slate-700 hover:border-rose-500 text-left transition group">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-slate-200 group-hover:text-rose-400">PUMP-204</span>
+                <span class="px-1.5 py-0.5 rounded text-[10px] bg-rose-950 text-rose-300">Cavitation</span>
+              </div>
+              <p class="text-slate-400 mt-1">Causes severe pressure drop, flow reduction & ultrasonic spikes.</p>
+            </button>
+
+            <button onclick="injectFault('MTR-101', 'E204_MOTOR_OVERHEAT')" class="p-3 rounded-xl bg-slate-800/80 hover:bg-red-950/40 border border-slate-700 hover:border-red-500 text-left transition group">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-slate-200 group-hover:text-red-400">MTR-101</span>
+                <span class="px-1.5 py-0.5 rounded text-[10px] bg-red-950 text-red-300">Overheating</span>
+              </div>
+              <p class="text-slate-400 mt-1">Simulates clogged fan shroud with temperature >98°C and FLA spike.</p>
+            </button>
+
+            <button onclick="injectFault('FAN-402', 'E401_ROTOR_UNBALANCE')" class="p-3 rounded-xl bg-slate-800/80 hover:bg-purple-950/40 border border-slate-700 hover:border-purple-500 text-left transition group">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-slate-200 group-hover:text-purple-400">FAN-402</span>
+                <span class="px-1.5 py-0.5 rounded text-[10px] bg-purple-950 text-purple-300">Rotor Unbalance</span>
+              </div>
+              <p class="text-slate-400 mt-1">1X harmonic mass imbalance pushing vibration into Zone D.</p>
+            </button>
+
+            <button onclick="injectFault('CMP-301', 'E502_PHASE_IMBALANCE')" class="p-3 rounded-xl bg-slate-800/80 hover:bg-blue-950/40 border border-slate-700 hover:border-blue-500 text-left transition group">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-slate-200 group-hover:text-blue-400">CMP-301</span>
+                <span class="px-1.5 py-0.5 rounded text-[10px] bg-blue-950 text-blue-300">Phase Imbalance</span>
+              </div>
+              <p class="text-slate-400 mt-1">Current draw deviation >8A with thermal climb.</p>
+            </button>
+
+            <button onclick="resetAllDevices()" class="p-3 rounded-xl bg-emerald-950/30 hover:bg-emerald-900/50 border border-emerald-800 hover:border-emerald-500 text-left transition group">
+              <div class="flex items-center justify-between">
+                <span class="font-bold text-emerald-300">Restore Normal</span>
+                <i class="fa-solid fa-rotate-left text-emerald-400"></i>
+              </div>
+              <p class="text-slate-400 mt-1">Reset all fleet machines to healthy baseline operation.</p>
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- RIGHT 1 COL: AI ASSISTANT CHAT COPILOT & KNOWLEDGE BASE -->
+      <div class="space-y-6">
+
+        <!-- AI CHAT COPILOT -->
+        <div class="glass-card rounded-2xl p-5 shadow-xl flex flex-col h-[520px]">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+            <div class="flex items-center space-x-2.5">
+              <div class="w-7 h-7 rounded-lg bg-indigo-600/30 border border-indigo-500/50 flex items-center justify-center text-indigo-400 text-xs">
+                <i class="fa-solid fa-robot"></i>
+              </div>
+              <div>
+                <h3 class="text-sm font-bold text-white">AI Diagnostics Copilot</h3>
+                <p class="text-[11px] text-slate-400">Grounding via RAG Equipment Manuals</p>
+              </div>
+            </div>
+            <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800">LLM Engine</span>
+          </div>
+
+          <!-- Chat messages area -->
+          <div id="chat-messages" class="flex-1 overflow-y-auto space-y-3.5 py-4 custom-scroll text-xs">
+            <div class="flex items-start space-x-2">
+              <div class="w-6 h-6 rounded-full bg-cyan-700/50 text-cyan-300 flex items-center justify-center text-[10px] shrink-0 mt-0.5">AI</div>
+              <div class="bg-slate-800/90 rounded-xl p-3 border border-slate-700/60 text-slate-200 space-y-1 max-w-[90%]">
+                <p class="font-semibold text-cyan-300">Diagnostic Copilot Ready (P_311)</p>
+                <p>Hello! I monitor live IoT telemetry and reference industrial ISO 10816 standards, bearing catalogs, and equipment manuals. Ask me anything, or select a machine to run a comprehensive fault diagnosis!</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Chat input -->
+          <form onsubmit="sendChatMessage(event)" class="pt-3 border-t border-slate-800 flex items-center space-x-2">
+            <input type="text" id="chat-input" placeholder="Ask about faults, ISO limits, or symptoms..." class="flex-1 bg-slate-900 border border-slate-700 text-xs text-white rounded-xl px-3 py-2.5 focus:outline-none focus:border-cyan-500 transition">
+            <button type="submit" class="bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl px-3.5 py-2.5 text-xs transition">
+              <i class="fa-solid fa-paper-plane"></i>
+            </button>
+          </form>
+        </div>
+
+        <!-- KNOWLEDGE BASE QUICK SUMMARY -->
+        <div class="glass-card rounded-2xl p-5 shadow-xl text-xs space-y-3">
+          <div class="flex items-center justify-between">
+            <h4 class="font-bold text-slate-300 flex items-center space-x-2">
+              <i class="fa-solid fa-book-bookmark text-indigo-400"></i>
+              <span>RAG Knowledge Base</span>
+            </h4>
+            <span id="kb-count" class="font-mono text-cyan-400">20 Chunks</span>
+          </div>
+          <div class="space-y-1.5 text-slate-400">
+            <div class="flex justify-between items-center py-1 border-b border-slate-800/60">
+              <span>ISO 10816-3 Vibration Severity</span>
+              <span class="text-emerald-400 font-mono text-[10px]">Indexed</span>
+            </div>
+            <div class="flex justify-between items-center py-1 border-b border-slate-800/60">
+              <span>Induction Motor Fault Catalog</span>
+              <span class="text-emerald-400 font-mono text-[10px]">Indexed</span>
+            </div>
+            <div class="flex justify-between items-center py-1 border-b border-slate-800/60">
+              <span>Centrifugal Pump Cavitation Guide</span>
+              <span class="text-emerald-400 font-mono text-[10px]">Indexed</span>
+            </div>
+            <div class="flex justify-between items-center py-1 border-b border-slate-800/60">
+              <span>Screw Compressor Diagnostic Catalog</span>
+              <span class="text-emerald-400 font-mono text-[10px]">Indexed</span>
+            </div>
+            <div class="flex justify-between items-center py-1">
+              <span>OSHA LOTO Safety & FMEA Tree</span>
+              <span class="text-emerald-400 font-mono text-[10px]">Indexed</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+  </main>
+
+  <!-- DIAGNOSIS RESULT MODAL -->
+  <div id="diagnosis-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto custom-scroll shadow-2xl p-6 space-y-5">
+      
+      <div class="flex items-center justify-between border-b border-slate-800 pb-4">
+        <div class="flex items-center space-x-3">
+          <div id="modal-severity-icon" class="w-10 h-10 rounded-xl flex items-center justify-center text-lg"></div>
+          <div>
+            <h3 class="text-base font-bold text-white flex items-center space-x-2">
+              <span id="modal-device-id"></span>
+              <span id="modal-severity-badge" class="px-2 py-0.5 text-xs rounded font-bold"></span>
+            </h3>
+            <p id="modal-diag-id" class="text-xs text-slate-400 font-mono"></p>
+          </div>
+        </div>
+        <button onclick="closeDiagnosisModal()" class="text-slate-400 hover:text-white text-lg">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <!-- Fault & ISO Compliance Banner -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+        <div class="bg-slate-800/80 p-3 rounded-xl border border-slate-700/70">
+          <span class="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">Identified Failure Mode</span>
+          <span id="modal-fault-title" class="font-bold text-white text-sm mt-0.5 block"></span>
+        </div>
+        <div class="bg-slate-800/80 p-3 rounded-xl border border-slate-700/70">
+          <span class="text-slate-400 block text-[10px] uppercase font-bold tracking-wider">ISO 10816 Evaluation</span>
+          <span id="modal-iso-eval" class="font-bold text-cyan-300 text-sm mt-0.5 block"></span>
+        </div>
+      </div>
+
+      <!-- Root Cause Analysis -->
+      <div>
+        <h4 class="text-xs font-bold text-slate-300 uppercase tracking-wider mb-1 flex items-center space-x-2">
+          <i class="fa-solid fa-magnifying-glass-chart text-cyan-400"></i>
+          <span>Engineering Root-Cause Analysis</span>
+        </h4>
+        <div id="modal-root-cause" class="text-xs bg-slate-950/60 p-3.5 rounded-xl border border-slate-800 text-slate-200 leading-relaxed"></div>
+      </div>
+
+      <!-- Prescribed Remediation Actions -->
+      <div>
+        <h4 class="text-xs font-bold text-slate-300 uppercase tracking-wider mb-2 flex items-center space-x-2">
+          <i class="fa-solid fa-screwdriver-wrench text-amber-400"></i>
+          <span>Prescribed Corrective Actions</span>
+        </h4>
+        <div id="modal-actions" class="space-y-2 text-xs"></div>
+      </div>
+
+      <!-- Retrieved RAG Knowledge Documents -->
+      <div>
+        <h4 class="text-xs font-bold text-slate-300 uppercase tracking-wider mb-2 flex items-center space-x-2">
+          <i class="fa-solid fa-book-atlas text-indigo-400"></i>
+          <span>Retrieved Technical Manual Citations (RAG)</span>
+        </h4>
+        <div id="modal-references" class="space-y-2 text-xs"></div>
+      </div>
+
+      <!-- RUL & Safety -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs pt-2 border-t border-slate-800">
+        <div>
+          <span class="text-slate-400 font-semibold">Estimated Remaining Useful Life:</span>
+          <p id="modal-rul" class="font-mono text-amber-300 font-bold mt-0.5"></p>
+        </div>
+        <div>
+          <span class="text-slate-400 font-semibold">Diagnostic Model Used:</span>
+          <p id="modal-model-used" class="font-mono text-cyan-400 mt-0.5"></p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- 24/7 GLOBAL ACCESS MODAL -->
+  <div id="remote-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full shadow-2xl p-6 space-y-5 text-center">
+      
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 class="text-sm font-bold text-white flex items-center space-x-2">
+          <i class="fa-solid fa-earth-americas text-cyan-400"></i>
+          <span>24/7 Universal Remote Access</span>
+        </h3>
+        <button onclick="closeRemoteModal()" class="text-slate-400 hover:text-white">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <p class="text-xs text-slate-300">
+        Open this assistant from <strong class="text-white">any smartphone, tablet, or PC worldwide</strong> on cellular data (4G/5G) or any external Wi-Fi network without port forwarding!
+      </p>
+
+      <!-- QR Code display -->
+      <div class="flex justify-center p-3 bg-white rounded-xl w-48 h-48 mx-auto" id="qrcode"></div>
+
+      <!-- Public HTTPS URL -->
+      <div class="space-y-1.5 text-left text-xs">
+        <label class="font-semibold text-slate-400">Public HTTPS URL (Global Cloudflare Tunnel):</label>
+        <div class="flex items-center space-x-2">
+          <input type="text" id="public-url-input" readonly class="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-cyan-300 font-mono text-xs select-all">
+          <button onclick="copyPublicUrl()" class="px-3 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg text-slate-200 text-xs">
+            <i class="fa-regular fa-copy"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Local LAN URL -->
+      <div class="text-left text-xs space-y-1">
+        <label class="font-semibold text-slate-400">Local Wi-Fi Network URL:</label>
+        <div class="bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-slate-300 font-mono text-xs" id="lan-url-display"></div>
+      </div>
+
+      <div class="pt-2">
+        <button onclick="closeRemoteModal()" class="w-full py-2 bg-cyan-600 hover:bg-cyan-500 rounded-xl text-xs font-bold text-white transition">
+          Done
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <footer class="border-t border-slate-800/80 bg-slate-950 py-3 px-4 text-center text-xs text-slate-500">
+    Project P_311: Knowledge driven IoT fault diagnosis assistant | Python, MQTT, RAG, LLM
+  </footer>
+
+  <script src="/static/js/dashboard.js"></script>
+</body>
+</html>
